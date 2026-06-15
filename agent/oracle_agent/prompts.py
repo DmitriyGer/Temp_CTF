@@ -12,6 +12,7 @@ SYSTEM_PROMPT = """\
 Соблюдай подключенный playbook и SQL safety boundaries.
 Верни ровно один следующий action, а не полный план.
 Ответ должен быть единственным JSON-объектом без Markdown и пояснений вне JSON.
+Используй поле action_type. Поля action, user, tool и command запрещены.
 Используй минимальные привилегии. CTF_STUDENT получает только CREATE SESSION.
 SELECT на CTF.CTF_FLAG выдавай только роли CTF_ROLE.
 CTF_ROLE должна быть назначена CTF_STUDENT, но не быть default role.
@@ -22,6 +23,24 @@ CTF_ROLE должна быть назначена CTF_STUDENT, но не быт�
 Для DDL и GRANT по возможности указывай verification_sql.
 """
 
+RESPONSE_REMINDER = """\
+ОБЯЗАТЕЛЬНЫЙ ФОРМАТ ОТВЕТА:
+{
+  "action_type": "sql",
+  "reason": "Краткая причина",
+  "sql": "ALTER USER compromised_user ACCOUNT UNLOCK",
+  "expected_result": "Учётная запись разблокирована",
+  "safety_notes": "Действие разрешено учебным сценарием",
+  "verification_sql": "SELECT username, account_status FROM dba_users WHERE username = 'COMPROMISED_USER'",
+  "next_goal": "Найти таблицу credentials",
+  "username": null,
+  "password": null
+}
+
+Допустимые action_type: connect, sql, verify, set_role, final_report, stop, ask_human.
+Не возвращай {"action": "unlock_user", "user": "..."}.
+"""
+
 
 def initial_prompt(context: PlaybookContext) -> str:
     schema = json.dumps(ACTION_JSON_SCHEMA, ensure_ascii=False, indent=2)
@@ -29,6 +48,7 @@ def initial_prompt(context: PlaybookContext) -> str:
         f"{SYSTEM_PROMPT}\n\n"
         f"JSON Schema ответа:\n{schema}\n\n"
         f"Инструкционный контекст:\n{context.full_context}\n\n"
+        f"{RESPONSE_REMINDER}\n\n"
         "Начни с одного следующего безопасного действия."
     )
 
@@ -45,5 +65,6 @@ def next_prompt(
         f"Инструкционный контекст:\n{context.full_context}\n\n"
         f"Последние наблюдения:\n{compact_history}\n"
         f"{correction_text}\n"
+        f"{RESPONSE_REMINDER}\n\n"
         "Верни только один следующий action по JSON Schema."
     )

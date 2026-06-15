@@ -12,6 +12,14 @@ SPECIAL_FILES = {
     "telemetry_rules": "execution_telemetry_rules.md",
     "report_schema": "completion_report_schema.md",
 }
+CONTEXT_FILES = [
+    "agent_identity_and_scope.md",
+    "oracle_variant_runbook.md",
+    "adaptive_flag_discovery.md",
+    "sql_safety_boundaries.md",
+    "execution_telemetry_rules.md",
+    "completion_report_schema.md",
+]
 
 
 @dataclass(frozen=True)
@@ -70,9 +78,9 @@ def load_playbook(directory: Path | str, task_file: str) -> PlaybookContext:
     }
     task_text = _read(task_path)
     sections = [
-        f"\n===== FILE: {name} =====\n{content.strip()}"
-        for name, content in files.items()
-        if name != task_path.name
+        f"\n===== FILE: {name} =====\n{files[name].strip()}"
+        for name in CONTEXT_FILES
+        if files.get(name)
     ]
     sections.append(f"\n===== SELECTED TASK: {task_path.name} =====\n{task_text.strip()}")
 

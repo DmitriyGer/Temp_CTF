@@ -7,7 +7,7 @@ import requests
 from pydantic import ValidationError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
-from .action_schema import AgentAction
+from .action_schema import ACTION_JSON_SCHEMA, AgentAction
 
 
 class OllamaError(RuntimeError):
@@ -43,17 +43,30 @@ class OllamaClient:
         reraise=True,
     )
     def _generate(self, prompt: str) -> dict[str, Any]:
+        body = {
+            "model": self.model,
+            "prompt": prompt,
+            "stream": False,
+            "format": ACTION_JSON_SCHEMA,
+            "options": {
+                "temperature": 0,
+                "num_ctx": 32768,
+            },
+        }
         response = requests.post(
             f"{self.base_url}/api/generate",
-            json={
-                "model": self.model,
-                "prompt": prompt,
-                "stream": False,
-                "format": "json",
-                "options": {"temperature": 0},
-            },
+            json=body,
             timeout=self.timeout,
         )
+        if response.status_code == 400 and any(
+            word in response.text.lower() for word in ("format", "schema")
+        ):
+            body["format"] = "json"
+            response = requests.post(
+                f"{self.base_url}/api/generate",
+                json=body,
+                timeout=self.timeout,
+            )
         response.raise_for_status()
         return response.json()
 
