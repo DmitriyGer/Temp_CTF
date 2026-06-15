@@ -7,9 +7,9 @@ services:
     restart: "no"
     volumes:
       - ../trajectories:/app/trajectories
-    networks:
-      - oracle-practice-net
+    # networks:
+    #   - oracle-practice-net
 
-networks:
-  oracle-practice-net:
-    external: true
+# networks:
+#   oracle-practice-net:
+#     external: true

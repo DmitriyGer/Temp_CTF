@@ -1,7 +1,7 @@
 services:
   oracle-free:
     image: gvenzl/oracle-free:full-faststart
-    container_name: oracle-free
+    container_name: oracle-free-2
     restart: unless-stopped
 
     ports:
@@ -17,4 +17,4 @@ services:
 
 volumes:
   oracle-data:
-    name: oracle-practice-oracle-data
+    name: oracle-practice-oracle-data-2
