@@ -50,7 +50,7 @@ class OllamaClient:
             "format": OLLAMA_ACTION_SCHEMA,
             "options": {
                 "temperature": 0,
-                "num_ctx": 16384,
+                "num_ctx": 8192,
             },
         }
         response = requests.post(

@@ -297,10 +297,50 @@ class AgentRunner:
         )
 
     def _append_history(self, action: str, result: dict[str, Any]) -> None:
+        observation = {
+            key: result.get(key)
+            for key in (
+                "success",
+                "status",
+                "sql_allowed",
+                "error_code",
+                "error_message",
+                "guard_reason",
+            )
+            if result.get(key) is not None
+        }
+        payload = result.get("result")
+        if isinstance(payload, dict):
+            observation["result"] = {
+                key: payload.get(key)
+                for key in ("status", "row_count", "error_code", "error_message")
+                if payload.get(key) is not None
+            }
+            rows = payload.get("rows")
+            if isinstance(rows, list) and rows:
+                observation["result"]["rows_preview"] = rows[:3]
+        verification = result.get("verification")
+        if isinstance(verification, dict):
+            observation["verification"] = {
+                key: verification.get(key)
+                for key in (
+                    "success",
+                    "status",
+                    "row_count",
+                    "error_code",
+                    "error_message",
+                    "mode",
+                    "message",
+                )
+                if verification.get(key) is not None
+            }
+            rows = verification.get("rows")
+            if isinstance(rows, list) and rows:
+                observation["verification"]["rows_preview"] = rows[:3]
         self.history.append(
             {
                 "action": action,
-                "observation": sanitize(result, self.known_secrets),
+                "observation": sanitize(observation, self.known_secrets),
             }
         )
 

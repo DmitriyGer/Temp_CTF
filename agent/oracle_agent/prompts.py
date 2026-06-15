@@ -42,13 +42,20 @@ RESPONSE_REMINDER = """\
 """
 
 
-def initial_prompt(context: PlaybookContext) -> str:
+def _static_prefix(context: PlaybookContext) -> str:
     schema = json.dumps(OLLAMA_ACTION_SCHEMA, ensure_ascii=False, indent=2)
     return (
         f"{SYSTEM_PROMPT}\n\n"
         f"JSON Schema ответа:\n{schema}\n\n"
         f"Инструкционный контекст:\n{context.full_context}\n\n"
-        f"{RESPONSE_REMINDER}\n\n"
+        f"{RESPONSE_REMINDER}"
+    )
+
+
+def initial_prompt(context: PlaybookContext) -> str:
+    return (
+        f"{_static_prefix(context)}\n\n"
+        "Последние наблюдения: подключение к Oracle выполнено.\n"
         "Начни с одного следующего безопасного действия."
     )
 
@@ -58,13 +65,11 @@ def next_prompt(
     history: list[dict[str, Any]],
     correction: str | None = None,
 ) -> str:
-    compact_history = json.dumps(history[-8:], ensure_ascii=False, default=str, indent=2)
+    compact_history = json.dumps(history[-4:], ensure_ascii=False, default=str, separators=(",", ":"))
     correction_text = f"\nИсправление формата/действия: {correction}\n" if correction else ""
     return (
-        f"{SYSTEM_PROMPT}\n\n"
-        f"Инструкционный контекст:\n{context.full_context}\n\n"
+        f"{_static_prefix(context)}\n\n"
         f"Последние наблюдения:\n{compact_history}\n"
         f"{correction_text}\n"
-        f"{RESPONSE_REMINDER}\n\n"
         "Верни только один следующий action по JSON Schema."
     )

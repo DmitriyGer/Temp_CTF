@@ -12,14 +12,7 @@ SPECIAL_FILES = {
     "telemetry_rules": "execution_telemetry_rules.md",
     "report_schema": "completion_report_schema.md",
 }
-CONTEXT_FILES = [
-    "agent_identity_and_scope.md",
-    "oracle_variant_runbook.md",
-    "adaptive_flag_discovery.md",
-    "sql_safety_boundaries.md",
-    "execution_telemetry_rules.md",
-    "completion_report_schema.md",
-]
+CONTEXT_FILES = ["runtime_agent_guide.md"]
 
 
 @dataclass(frozen=True)

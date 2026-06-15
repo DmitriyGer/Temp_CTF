@@ -66,3 +66,7 @@ REQUEST_TIMEOUT=900 docker compose run --rm oracle-agent
 ## Как работает агент
 
 Агент загружает инструкции из `oracle_ctf_playbook`, получает от Ollama один JSON-action, проверяет SQL через allowlist и только затем выполняет его в Oracle через `python-oracledb`. Пароли маскируются, опасные SQL-команды блокируются, флаг сохраняется только после реального результата Oracle.
+
+Для работы модели используется краткий файл
+`oracle_ctf_playbook/runtime_agent_guide.md`. Подробные исходные playbook-файлы
+остаются в проекте как документация, но не отправляются модели на каждом шаге.
