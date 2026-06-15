@@ -21,6 +21,39 @@ class OptionalAdvisor:
         r"STARTUP|TRUNCATE|UPDATE|DBMS_|UTL_)\b",
         re.IGNORECASE,
     )
+    SYSTEM_OWNERS = {
+        "ANONYMOUS",
+        "AUDSYS",
+        "CTXSYS",
+        "DBSFWUSER",
+        "DBSNMP",
+        "DIP",
+        "DVF",
+        "DVSYS",
+        "GGSYS",
+        "GSMADMIN_INTERNAL",
+        "GSMCATUSER",
+        "GSMUSER",
+        "LBACSYS",
+        "MDSYS",
+        "OJVMSYS",
+        "OLAPSYS",
+        "ORACLE_OCM",
+        "ORDDATA",
+        "ORDPLUGINS",
+        "ORDSYS",
+        "OUTLN",
+        "REMOTE_SCHEDULER_AGENT",
+        "SYS",
+        "SYSBACKUP",
+        "SYSDG",
+        "SYSKM",
+        "SYSRAC",
+        "SYSTEM",
+        "WMSYS",
+        "XDB",
+        "XS$NULL",
+    }
 
     def __init__(self, settings: LlmSettings, policy: dict[str, Any], journal: RunJournal) -> None:
         self.settings = settings
@@ -95,14 +128,22 @@ class OptionalAdvisor:
                 "failed_tasks": failed_tasks,
             },
         )
+        grounding = self._collect_grounding(database)
         observation: dict[str, Any] = {
             "status": "start",
             "failed_tasks": failed_tasks,
             "known_flag_object": "CTF.CTF_FLAG was checked and did not contain a flag",
+            "database_map": grounding,
+            "instruction": (
+                "Choose a promising non-system object from database_map. "
+                "Inspect its columns or read a small number of rows."
+            ),
         }
+        attempted_sql: set[str] = set()
+        history: list[dict[str, Any]] = []
 
         for step in range(1, self.settings.search_steps + 1):
-            prompt = self._search_prompt(step, observation)
+            prompt = self._search_prompt(step, observation, history)
             self.journal.event(
                 "llm_thinking",
                 "running",
@@ -186,11 +227,31 @@ class OptionalAdvisor:
             sql = str(action.get("sql") or "").strip()
             try:
                 sql = self._validate_read_only_sql(sql)
+                normalized_sql = re.sub(r"\s+", " ", sql).upper()
+                if re.search(
+                    r"\bSELECT \* FROM ALL_(OBJECTS|TABLES|VIEWS|TAB_COLUMNS)\b",
+                    normalized_sql,
+                ):
+                    raise ValueError(
+                        "Broad data-dictionary scans are unnecessary; use database_map"
+                    )
+                if normalized_sql in attempted_sql:
+                    raise ValueError("This SQL query was already executed")
+                direct_owner = self._direct_system_owner(sql)
+                if direct_owner:
+                    raise ValueError(
+                        f"Direct reads from Oracle-maintained schema {direct_owner} are not useful"
+                    )
+                attempted_sql.add(normalized_sql)
             except ValueError as exc:
                 observation = {
                     "status": "rejected",
                     "error": str(exc),
-                    "instruction": "Return one read-only SELECT or WITH query.",
+                    "database_map": grounding,
+                    "instruction": (
+                        "Choose a different read-only query against a non-system object "
+                        "from database_map."
+                    ),
                 }
                 self.journal.event(
                     "llm_query",
@@ -211,7 +272,16 @@ class OptionalAdvisor:
                     "sql": sql,
                     "error_code": result.error_code,
                     "error": result.error_message,
+                    "database_map": grounding,
                 }
+                history.append(
+                    {
+                        "step": step,
+                        "sql": sql,
+                        "status": "oracle_error",
+                        "error": compact(result.error_message, 300),
+                    }
+                )
                 self.journal.event(
                     "llm_query",
                     "failed",
@@ -244,12 +314,25 @@ class OptionalAdvisor:
                     "strategy": "llm_search",
                 }
 
+            rows_for_model = self._compact_rows(result.rows)
+            history.append(
+                {
+                    "step": step,
+                    "sql": sql,
+                    "status": "empty" if not result.rows else "no_flag",
+                    "row_count": result.row_count,
+                }
+            )
             observation = {
                 "status": "query_success",
                 "sql": sql,
                 "row_count": result.row_count,
-                "rows": result.rows[:10],
-                "instruction": "No flag matched. Analyze these rows and choose the next query.",
+                "rows": rows_for_model,
+                "database_map": grounding,
+                "instruction": (
+                    "No flag matched. Do not query this empty object again. "
+                    "Choose another promising non-system object or inspect its columns."
+                ),
             }
 
         self.journal.event(
@@ -259,22 +342,108 @@ class OptionalAdvisor:
         )
         return None
 
-    def _search_prompt(self, step: int, observation: dict[str, Any]) -> str:
+    def _search_prompt(
+        self,
+        step: int,
+        observation: dict[str, Any],
+        history: list[dict[str, Any]],
+    ) -> str:
         return (
             "Ты LLM-агент для локальной учебной Oracle CTF. "
             "Три известных варианта уже не нашли флаг. Самостоятельно исследуй БД "
-            "последовательными read-only запросами. Сначала изучай ALL_OBJECTS, "
-            "ALL_TABLES, ALL_VIEWS и ALL_TAB_COLUMNS, затем читай подходящие "
-            "пользовательские таблицы или представления. Ищи значения вида "
+            "последовательными read-only запросами. Карта пользовательских объектов "
+            "уже передана в database_map: сначала используй её, не запрашивай весь "
+            "ALL_OBJECTS через SELECT *. Игнорируй Oracle-maintained схемы вроде SYS, "
+            "SYSTEM, GSMADMIN_INTERNAL, LBACSYS, XDB и MDSYS. Ищи значения вида "
             "CTF{...} или FLAG{...}. Не используй DDL, DML, PL/SQL, DBMS_* и UTL_*. "
+            "Не повторяй запросы и не перебирай значения ключа в пустой таблице. "
+            "Если объект пуст, сразу переходи к другому кандидату. "
             "За один шаг верни ровно один JSON-объект без markdown:\n"
             '{"action":"query","sql":"SELECT ...","reason":"кратко"}\n'
             "Когда разумные варианты исчерпаны:\n"
             '{"action":"finish","sql":null,"reason":"кратко"}\n'
             f"Шаг: {step}/{self.settings.search_steps}\n"
+            "История уже выполненных запросов:\n"
+            f"{json.dumps(history[-8:], ensure_ascii=False, default=str)}\n"
             "Последнее наблюдение:\n"
-            f"{json.dumps(observation, ensure_ascii=False, default=str)[:12000]}"
+            f"{json.dumps(observation, ensure_ascii=False, default=str)[:9000]}"
         )
+
+    def _collect_grounding(self, database: OracleGateway) -> dict[str, Any]:
+        owners_result = database.query(
+            "SELECT USERNAME FROM ALL_USERS "
+            "WHERE ORACLE_MAINTAINED = 'N' ORDER BY USERNAME",
+            max_rows=80,
+        )
+        owners = [
+            str(row.get("username"))
+            for row in owners_result.rows
+            if row.get("username")
+        ] if owners_result.ok else []
+
+        objects_result = database.query(
+            "SELECT O.OWNER, O.OBJECT_NAME, O.OBJECT_TYPE "
+            "FROM ALL_OBJECTS O JOIN ALL_USERS U ON U.USERNAME = O.OWNER "
+            "WHERE U.ORACLE_MAINTAINED = 'N' "
+            "AND O.OBJECT_TYPE IN ('TABLE','VIEW') "
+            "ORDER BY O.OWNER, O.OBJECT_NAME",
+            max_rows=160,
+        )
+        objects = self._compact_rows(objects_result.rows) if objects_result.ok else []
+
+        columns_result = database.query(
+            "SELECT C.OWNER, C.TABLE_NAME, C.COLUMN_NAME, C.DATA_TYPE "
+            "FROM ALL_TAB_COLUMNS C JOIN ALL_USERS U ON U.USERNAME = C.OWNER "
+            "WHERE U.ORACLE_MAINTAINED = 'N' "
+            "AND (UPPER(C.TABLE_NAME) LIKE '%FLAG%' "
+            "OR UPPER(C.TABLE_NAME) LIKE '%CTF%' "
+            "OR UPPER(C.TABLE_NAME) LIKE '%SECRET%' "
+            "OR UPPER(C.TABLE_NAME) LIKE '%TOKEN%' "
+            "OR UPPER(C.COLUMN_NAME) LIKE '%FLAG%' "
+            "OR UPPER(C.COLUMN_NAME) LIKE '%SECRET%' "
+            "OR UPPER(C.COLUMN_NAME) LIKE '%TOKEN%' "
+            "OR UPPER(C.COLUMN_NAME) LIKE '%VALUE%' "
+            "OR UPPER(C.COLUMN_NAME) LIKE '%DATA%') "
+            "ORDER BY C.OWNER, C.TABLE_NAME, C.COLUMN_ID",
+            max_rows=160,
+        )
+        columns = self._compact_rows(columns_result.rows) if columns_result.ok else []
+        context = {
+            "non_system_owners": owners,
+            "objects": objects,
+            "interesting_columns": columns,
+        }
+        self.journal.event(
+            "llm_grounding",
+            "success",
+            {
+                "owner_count": len(owners),
+                "object_count": len(objects),
+                "interesting_column_count": len(columns),
+            },
+        )
+        return context
+
+    @staticmethod
+    def _compact_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        compacted: list[dict[str, Any]] = []
+        for row in rows[:40]:
+            compacted.append(
+                {
+                    str(key): value
+                    for index, (key, value) in enumerate(row.items())
+                    if index < 10
+                }
+            )
+        return compacted
+
+    @classmethod
+    def _direct_system_owner(cls, sql: str) -> str | None:
+        references = re.findall(
+            r"\b(?:FROM|JOIN)\s+([A-Z][A-Z0-9_$#]*)\.",
+            sql.upper(),
+        )
+        return next((owner for owner in references if owner in cls.SYSTEM_OWNERS), None)
 
     @staticmethod
     def _parse_action(answer: str) -> dict[str, Any]:
