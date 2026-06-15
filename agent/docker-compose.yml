@@ -21,7 +21,7 @@ services:
       LLM_API_TYPE: ${LLM_API_TYPE:-ollama}
       LLM_URL: ${LLM_URL:-http://host.docker.internal:58003}
       LLM_MODEL: ${LLM_MODEL:-qwen2.5-coder:7b}
-      LLM_SEARCH_STEPS: ${LLM_SEARCH_STEPS:-10}
+      LLM_SEARCH_STEPS: ${LLM_SEARCH_STEPS:-50}
       LLM_QUERY_ROW_LIMIT: ${LLM_QUERY_ROW_LIMIT:-30}
       LLM_EXPLAIN_ERRORS: ${LLM_EXPLAIN_ERRORS:-true}
       ALLOW_RESOURCE_LIMIT: ${ALLOW_RESOURCE_LIMIT:-false}
