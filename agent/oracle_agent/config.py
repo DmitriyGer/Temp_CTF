@@ -19,6 +19,8 @@ def _as_bool(value: str | bool | None, default: bool = False) -> bool:
 class Settings:
     ollama_url: str
     ollama_model: str
+    llm_api_type: str
+    llm_api_key: str | None
     oracle_host: str
     oracle_port: int
     oracle_service: str
@@ -41,8 +43,12 @@ class Settings:
     def from_env(cls) -> "Settings":
         load_dotenv()
         settings = cls(
-            ollama_url=os.getenv("OLLAMA_URL", "http://ollama:11434").rstrip("/"),
-            ollama_model=os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b"),
+            ollama_url=os.getenv(
+                "OLLAMA_URL", "http://192.168.10.65:8901/v1"
+            ).rstrip("/"),
+            ollama_model=os.getenv("OLLAMA_MODEL", "Qwen/Qwen3.6-27B"),
+            llm_api_type=os.getenv("LLM_API_TYPE", "auto").strip().lower(),
+            llm_api_key=os.getenv("LLM_API_KEY") or None,
             oracle_host=os.getenv("ORACLE_HOST", "oracle-free"),
             oracle_port=int(os.getenv("ORACLE_PORT", "1521")),
             oracle_service=os.getenv("ORACLE_SERVICE", "FREEPDB1"),
@@ -84,6 +90,8 @@ class Settings:
             raise ValueError("OLLAMA_NUM_CTX must be at least 2048")
         if self.ollama_num_predict < 64:
             raise ValueError("OLLAMA_NUM_PREDICT must be at least 64")
+        if self.llm_api_type not in {"auto", "ollama", "openai"}:
+            raise ValueError("LLM_API_TYPE must be auto, ollama or openai")
 
     def with_overrides(self, **changes: object) -> "Settings":
         return replace(self, **changes)
@@ -92,6 +100,7 @@ class Settings:
         return {
             "ollama_url": self.ollama_url,
             "ollama_model": self.ollama_model,
+            "llm_api_type": self.llm_api_type,
             "oracle_host": self.oracle_host,
             "oracle_port": self.oracle_port,
             "oracle_service": self.oracle_service,

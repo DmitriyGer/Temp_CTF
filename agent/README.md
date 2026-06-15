@@ -4,10 +4,10 @@
 
 По умолчанию используются:
 
-- Ollama: `http://host.docker.internal:58003`;
+- OpenAI-compatible llama.cpp API: `http://192.168.10.65:8901/v1`;
 - Oracle: `host.docker.internal:58002`;
 - service name: `FREEPDB1`;
-- модель: `qwen2.5-coder:7b`;
+- модель: `Qwen/Qwen3.6-27B`;
 - вариант: `oracle_ctf_case_a.txt`.
 
 ## Запуск
@@ -38,13 +38,24 @@ ORACLE_PASSWORD=другой_пароль docker compose run --rm oracle-agent
 TASK_FILE=oracle_ctf_case_b.txt docker compose run --rm oracle-agent
 ```
 
-## Другие адреса Oracle и Ollama
+## Другие адреса Oracle и LLM
 
 ```bash
-OLLAMA_URL=http://host.docker.internal:11434 \
+OLLAMA_URL=http://192.168.10.65:8901/v1 \
+OLLAMA_MODEL=Qwen/Qwen3.6-27B \
+LLM_API_TYPE=openai \
 ORACLE_HOST=host.docker.internal \
 ORACLE_PORT=1521 \
 ORACLE_PASSWORD=oracle \
+docker compose run --rm oracle-agent
+```
+
+Для прежнего Ollama:
+
+```bash
+OLLAMA_URL=http://host.docker.internal:58003 \
+OLLAMA_MODEL=qwen2.5-coder:7b \
+LLM_API_TYPE=ollama \
 docker compose run --rm oracle-agent
 ```
 

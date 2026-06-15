@@ -36,6 +36,8 @@ class AgentRunner:
             settings.request_timeout,
             settings.ollama_num_ctx,
             settings.ollama_num_predict,
+            settings.llm_api_type,
+            settings.llm_api_key,
         )
         self.oracle = oracle or OracleClient(
             settings.oracle_host, settings.oracle_port, settings.oracle_service
