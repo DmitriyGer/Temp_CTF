@@ -56,6 +56,13 @@ docker compose run --rm oracle-agent collect-trajectories --target 1000
 
 Траектории и completion report сохраняются в `agent/trajectories`.
 
+На сервере без GPU первый ответ модели может формироваться несколько минут.
+Таймаут по умолчанию равен 600 секундам. При необходимости его можно изменить:
+
+```bash
+REQUEST_TIMEOUT=900 docker compose run --rm oracle-agent
+```
+
 ## Как работает агент
 
 Агент загружает инструкции из `oracle_ctf_playbook`, получает от Ollama один JSON-action, проверяет SQL через allowlist и только затем выполняет его в Oracle через `python-oracledb`. Пароли маскируются, опасные SQL-команды блокируются, флаг сохраняется только после реального результата Oracle.

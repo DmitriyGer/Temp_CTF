@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .action_schema import ACTION_JSON_SCHEMA
+from .action_schema import OLLAMA_ACTION_SCHEMA
 from .playbook_loader import PlaybookContext
 
 
@@ -43,7 +43,7 @@ RESPONSE_REMINDER = """\
 
 
 def initial_prompt(context: PlaybookContext) -> str:
-    schema = json.dumps(ACTION_JSON_SCHEMA, ensure_ascii=False, indent=2)
+    schema = json.dumps(OLLAMA_ACTION_SCHEMA, ensure_ascii=False, indent=2)
     return (
         f"{SYSTEM_PROMPT}\n\n"
         f"JSON Schema ответа:\n{schema}\n\n"

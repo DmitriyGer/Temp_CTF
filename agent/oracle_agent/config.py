@@ -53,7 +53,7 @@ class Settings:
             collect_trajectories=_as_bool(os.getenv("COLLECT_TRAJECTORIES"), False),
             trajectory_target_count=int(os.getenv("TRAJECTORY_TARGET_COUNT", "1000")),
             allow_alter_system=_as_bool(os.getenv("ALLOW_ALTER_SYSTEM"), False),
-            request_timeout=int(os.getenv("REQUEST_TIMEOUT", "120")),
+            request_timeout=int(os.getenv("REQUEST_TIMEOUT", "600")),
         )
         settings.validate()
         return settings

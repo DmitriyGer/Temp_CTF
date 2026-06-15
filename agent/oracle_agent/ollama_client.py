@@ -7,7 +7,7 @@ import requests
 from pydantic import ValidationError
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
-from .action_schema import ACTION_JSON_SCHEMA, AgentAction
+from .action_schema import OLLAMA_ACTION_SCHEMA, AgentAction
 
 
 class OllamaError(RuntimeError):
@@ -37,7 +37,7 @@ class OllamaClient:
             )
 
     @retry(
-        retry=retry_if_exception_type(requests.RequestException),
+        retry=retry_if_exception_type(requests.ConnectionError),
         stop=stop_after_attempt(3),
         wait=wait_fixed(2),
         reraise=True,
@@ -47,10 +47,10 @@ class OllamaClient:
             "model": self.model,
             "prompt": prompt,
             "stream": False,
-            "format": ACTION_JSON_SCHEMA,
+            "format": OLLAMA_ACTION_SCHEMA,
             "options": {
                 "temperature": 0,
-                "num_ctx": 32768,
+                "num_ctx": 16384,
             },
         }
         response = requests.post(

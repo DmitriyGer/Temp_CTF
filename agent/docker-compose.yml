@@ -20,6 +20,7 @@ services:
       COLLECT_TRAJECTORIES: ${COLLECT_TRAJECTORIES:-false}
       TRAJECTORY_TARGET_COUNT: ${TRAJECTORY_TARGET_COUNT:-1000}
       ALLOW_ALTER_SYSTEM: ${ALLOW_ALTER_SYSTEM:-false}
+      REQUEST_TIMEOUT: ${REQUEST_TIMEOUT:-600}
     volumes:
       - ./oracle_ctf_playbook:/app/oracle_ctf_playbook:ro
       - ./trajectories:/app/trajectories
