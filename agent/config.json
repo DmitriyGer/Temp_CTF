@@ -1,31 +1,30 @@
 {
   "oracle": {
     "hosts": [
-      "host.docker.internal",
-      "oracle-free-2",
-      "127.0.0.1",
-      "localhost"
+      "host.docker.internal"
     ],
-    "port": 1521,
+    "port": 58002,
     "service_name": "FREEPDB1",
     "admin_user": "system",
     "admin_password": "Tech12345",
     "datafile_dir": "/opt/oracle/oradata/FREE/FREEPDB1"
   },
   "ollama": {
-    "base_url": "http://host.docker.internal:11434",
+    "base_url": "http://host.docker.internal:58003",
     "api_urls": [
-      "http://host.docker.internal:11434/api/generate"
+      "http://host.docker.internal:58003/api/generate"
     ],
     "model": "qwen2.5-coder:7b",
     "temperature": 0.0,
-    "timeout_seconds": 10,
+    "timeout_seconds": 60,
     "num_ctx": 2048,
-    "milestone_timeout_seconds": 60
+    "milestone_timeout_seconds": 90
   },
   "agent": {
-    "use_llm_planner": false,
+    "use_llm_planner": true,
     "use_llm_for_explanation": true,
+    "require_ollama": true,
+    "fail_if_llm_unavailable": true,
     "skip_known_variants_before_universal": false,
     "trajectories_dir": "/app/trajectories",
     "universal_max_objects": 50,

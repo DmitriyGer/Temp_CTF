@@ -1,11 +1,11 @@
 services:
   oracle-free:
     image: gvenzl/oracle-free:full-faststart
-    container_name: oracle-free-2
+    container_name: Temp-1
     restart: unless-stopped
 
     ports:
-      - "1521:1521"
+      - "58002:1521"
 
     environment:
       ORACLE_PASSWORD: "Tech12345"

@@ -1,11 +1,11 @@
 services:
   ollama:
     image: ollama/ollama:latest
-    container_name: ollama
+    container_name: Temp-2
     restart: unless-stopped
 
     ports:
-      - "11434:11434"
+      - "58003:11434"
 
     volumes:
       - ollama-data:/root/.ollama
