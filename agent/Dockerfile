@@ -6,11 +6,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY oracle_agent /app/oracle_agent
-COPY oracle_ctf_playbook /app/oracle_ctf_playbook
+COPY dba_agent ./dba_agent
+COPY settings.json policy.json ./
+COPY tasks ./tasks
 
-ENTRYPOINT ["python", "-m", "oracle_agent.main"]
-CMD ["run"]
+ENTRYPOINT ["python", "-m", "dba_agent.main"]

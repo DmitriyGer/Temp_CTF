@@ -1,129 +1,66 @@
-# Oracle CTF AI Agent
+# Oracle CTF Agent
 
-Агент запускается отдельно от Oracle Database и Ollama. База и Ollama должны быть уже подняты и доступны с хоста.
-
-По умолчанию используются:
-
-- OpenAI-compatible llama.cpp API: `http://192.168.10.65:8901/v1`;
-- Oracle: `host.docker.internal:58002`;
-- service name: `FREEPDB1`;
-- модель: `Qwen/Qwen3.6-27B`;
-- вариант: `oracle_ctf_case_a.txt`.
+Агент выполняет Oracle CTF детерминированным Python-кодом. Языковая модель не
+формирует и не выполняет SQL: она опционально объясняет ошибки Oracle. Если LLM
+недоступна, основной сценарий продолжается.
 
 ## Запуск
 
-Из папки `agent`:
+Oracle Database и Ollama должны быть заранее подняты:
 
 ```bash
-cd agent
-docker compose build --no-cache oracle-agent
-docker compose run --rm oracle-agent
+docker compose -f ./base/docker-compose.base.yml up -d
+docker compose -f ./ollama/docker-compose.ollama.yml up -d
+docker exec Temp-2 ollama pull qwen2.5-coder:7b
 ```
 
-После изменения Python-кода или Dockerfile пересоберите образ:
+По умолчанию агент использует Oracle на порту `58002` и Ollama на порту
+`58003`.
 
 ```bash
-docker compose build oracle-agent
+docker compose -f ./agent/docker-compose.yml build --no-cache oracle-agent
+docker compose -f ./agent/docker-compose.yml run --rm oracle-agent
 ```
 
-Если пароль Oracle отличается, передайте фактическое значение:
+Траектории и `final_result.json` сохраняются в `agent/trajectories`.
+
+## Один вариант
 
 ```bash
-ORACLE_PASSWORD=другой_пароль docker compose run --rm oracle-agent
+TASK_NAME=variant_a docker compose -f ./agent/docker-compose.yml run --rm oracle-agent
 ```
 
-## Другой вариант
+Без `TASK_NAME` агент проверяет варианты `A`, `B`, `C` по приоритету.
+
+## Без LLM
 
 ```bash
-TASK_FILE=oracle_ctf_case_b.txt docker compose run --rm oracle-agent
+LLM_ENABLED=false docker compose -f ./agent/docker-compose.yml run --rm oracle-agent
 ```
 
-## Другие адреса Oracle и LLM
+## Другие подключения
 
 ```bash
-OLLAMA_URL=http://192.168.10.65:8901/v1 \
-OLLAMA_MODEL=Qwen/Qwen3.6-27B \
-LLM_API_TYPE=openai \
 ORACLE_HOST=host.docker.internal \
 ORACLE_PORT=1521 \
 ORACLE_PASSWORD=oracle \
-docker compose run --rm oracle-agent
-```
-
-Для прежнего Ollama:
-
-```bash
-OLLAMA_URL=http://host.docker.internal:58003 \
-OLLAMA_MODEL=qwen2.5-coder:7b \
 LLM_API_TYPE=ollama \
-docker compose run --rm oracle-agent
+LLM_URL=http://host.docker.internal:58003 \
+LLM_MODEL=qwen2.5-coder:7b \
+docker compose -f ./agent/docker-compose.yml run --rm oracle-agent
 ```
 
-## Сбор 1000 траекторий
+## Пайплайн
 
-```bash
-docker compose run --rm oracle-agent collect-trajectories --target 1000
-```
+1. Retry подключения к Oracle.
+2. Загрузка JSON-вариантов.
+3. Разблокировка `COMPROMISED_USER`.
+4. Поиск `CREDENTIALS` и проверка найденного входа.
+5. Проверка и создание tablespace, profile, role и student user.
+6. Выдача минимальных привилегий и отключение default role.
+7. Вход как `CTF_STUDENT`, активация роли и чтение флага.
+8. Ограниченный metadata search, если известный объект не дал флаг.
+9. Сохранение trajectory и финального результата.
 
-Траектории и completion report сохраняются в `agent/trajectories`.
-
-На сервере без GPU первый ответ модели может формироваться несколько минут.
-Таймаут по умолчанию равен 600 секундам. При необходимости его можно изменить:
-
-```bash
-REQUEST_TIMEOUT=900 docker compose run --rm oracle-agent
-```
-
-## Просмотр выполнения
-
-Агент выводит в Docker logs текущий этап, номер шага, ожидание модели, выбранный
-action, маскированный SQL, результат safety guard, результат Oracle,
-verification и длительность. Пароли и полный prompt не выводятся.
-
-```bash
-docker compose run --rm oracle-agent
-```
-
-Чтобы после запуска использовать именно `docker compose logs`, запускайте
-сервис без `run --rm`:
-
-```bash
-docker compose up -d --build oracle-agent
-```
-
-В другом терминале:
-
-```bash
-docker compose logs -f oracle-agent
-```
-
-Пример:
-
-```text
-stage=step_start step=3/40 current_user=system
-stage=llm_wait step=3 attempt=1/3 prompt_chars=7200
-stage=action_received step=3 type=sql sql=ALTER USER ...
-stage=sql_guard allowed=True
-stage=step_done step=3 status=success total_ms=17020
-```
-
-Более подробные диагностические сообщения:
-
-```bash
-LOG_LEVEL=DEBUG docker compose run --rm oracle-agent
-```
-
-Параметры производительности Ollama:
-
-```bash
-OLLAMA_NUM_CTX=4096 OLLAMA_NUM_PREDICT=192 \
-docker compose run --rm oracle-agent
-```
-
-## Как работает агент
-
-Агент загружает инструкции из `oracle_ctf_playbook`, получает от Ollama один JSON-action, проверяет SQL через allowlist и только затем выполняет его в Oracle через `python-oracledb`. Пароли маскируются, опасные SQL-команды блокируются, флаг сохраняется только после реального результата Oracle.
-
-Для работы модели используется краткий файл
-`oracle_ctf_playbook/runtime_agent_guide.md`. Подробные исходные playbook-файлы
-остаются в проекте как документация, но не отправляются модели на каждом шаге.
+Опасные DML/DDL-команды блокируются централизованно. Пароли маскируются в
+консольных логах и trajectory.

@@ -1,0 +1,36 @@
+{
+  "name": "variant_a",
+  "priority": 1,
+  "compromised_user": "COMPROMISED_USER",
+  "credentials_table": "CREDENTIALS",
+  "flag_object": "CTF.CTF_FLAG",
+  "tablespace": {
+    "name": "CTF_TABLESPACE",
+    "size_mb": 150,
+    "autoextend": true,
+    "next_mb": 50,
+    "max_size_mb": 1024
+  },
+  "profile": {
+    "name": "CTF_PROFILE",
+    "limits": {
+      "SESSIONS_PER_USER": 4,
+      "IDLE_TIME": 30,
+      "FAILED_LOGIN_ATTEMPTS": 3,
+      "PASSWORD_REUSE_TIME": 60,
+      "PASSWORD_REUSE_MAX": 4
+    }
+  },
+  "role": {
+    "name": "CTF_ROLE",
+    "password": "ctf_role"
+  },
+  "student": {
+    "username": "CTF_STUDENT",
+    "password": "ctf_student",
+    "default_tablespace": "CTF_TABLESPACE",
+    "temporary_tablespace": "TEMP",
+    "quota_mb": 80,
+    "profile": "CTF_PROFILE"
+  }
+}

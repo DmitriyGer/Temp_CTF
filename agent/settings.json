@@ -1,0 +1,80 @@
+{
+  "oracle": {
+    "hosts": [
+      "host.docker.internal",
+      "172.17.0.1",
+      "oracle-free"
+    ],
+    "port": 58002,
+    "services": [
+      "FREEPDB1"
+    ],
+    "username": "system",
+    "password": "Tech12345",
+    "retries": 20,
+    "retry_delay": 5,
+    "connect_timeout": 10,
+    "datafile_dir": ""
+  },
+  "llm": {
+    "enabled": true,
+    "optional": true,
+    "api_type": "ollama",
+    "base_url": "http://host.docker.internal:58003",
+    "model": "qwen2.5-coder:7b",
+    "api_key": "",
+    "timeout": 180,
+    "explain_errors": true
+  },
+  "paths": {
+    "task_dir": "/app/tasks",
+    "trajectory_dir": "/app/trajectories",
+    "final_result": "/app/trajectories/final_result.json"
+  },
+  "allow_resource_limit": false,
+  "search": {
+    "object_limit": 120,
+    "row_limit": 20,
+    "column_limit": 16,
+    "name_markers": [
+      "FLAG",
+      "CTF",
+      "SECRET",
+      "TOKEN",
+      "ANSWER",
+      "RESULT",
+      "KEY"
+    ],
+    "credential_markers": [
+      "CREDENTIAL",
+      "CRED",
+      "LOGIN",
+      "PASSWORD",
+      "USER"
+    ],
+    "excluded_owners": [
+      "SYS",
+      "SYSTEM",
+      "XDB",
+      "MDSYS",
+      "CTXSYS",
+      "DBSNMP",
+      "OUTLN",
+      "ORDSYS",
+      "ORDDATA",
+      "WMSYS",
+      "GSMADMIN_INTERNAL"
+    ],
+    "allowed_types": [
+      "VARCHAR2",
+      "NVARCHAR2",
+      "CHAR",
+      "NCHAR",
+      "NUMBER",
+      "DATE",
+      "TIMESTAMP",
+      "TIMESTAMP WITH TIME ZONE",
+      "TIMESTAMP WITH LOCAL TIME ZONE"
+    ]
+  }
+}
