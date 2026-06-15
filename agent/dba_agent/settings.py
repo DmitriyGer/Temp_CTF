@@ -38,6 +38,8 @@ class LlmSettings:
     api_key: str | None
     timeout: int
     explain_errors: bool
+    search_steps: int
+    query_row_limit: int
 
 
 @dataclass(frozen=True)
@@ -100,6 +102,12 @@ class AppSettings:
                 timeout=int(os.getenv("LLM_TIMEOUT", llm.get("timeout", 120))),
                 explain_errors=_env_bool(
                     "LLM_EXPLAIN_ERRORS", bool(llm.get("explain_errors", True))
+                ),
+                search_steps=int(
+                    os.getenv("LLM_SEARCH_STEPS", llm.get("search_steps", 10))
+                ),
+                query_row_limit=int(
+                    os.getenv("LLM_QUERY_ROW_LIMIT", llm.get("query_row_limit", 30))
                 ),
             ),
             search=SearchSettings(

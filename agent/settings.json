@@ -24,7 +24,9 @@
     "model": "qwen2.5-coder:7b",
     "api_key": "",
     "timeout": 180,
-    "explain_errors": true
+    "explain_errors": true,
+    "search_steps": 10,
+    "query_row_limit": 30
   },
   "paths": {
     "task_dir": "/app/tasks",

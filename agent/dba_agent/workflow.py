@@ -43,16 +43,21 @@ class OracleCtfWorkflow:
             self.database.connect_admin()
             self._enable_resource_limits()
             tasks = self._load_tasks()
+            failed_tasks: list[str] = []
             for task in tasks:
                 result = self._run_task(task)
                 if result:
                     return self._success(result)
-            self.journal.event("metadata_search", "running")
-            fallback = self.discovery.search_flag()
-            if fallback:
-                return self._success(fallback)
+                failed_tasks.append(str(task["name"]))
+            llm_result = self.advisor.search_flag(
+                self.database,
+                self.matcher,
+                failed_tasks,
+            )
+            if llm_result:
+                return self._success(llm_result)
             return self._failure(
-                "Флаг не найден после известных вариантов и ограниченного metadata search."
+                "Флаг не найден после трёх известных вариантов и LLM-поиска."
             )
         finally:
             self.database.close()
