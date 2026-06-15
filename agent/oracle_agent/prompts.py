@@ -29,12 +29,8 @@ RESPONSE_REMINDER = """\
   "action_type": "sql",
   "reason": "Краткая причина",
   "sql": "ALTER USER compromised_user ACCOUNT UNLOCK",
-  "expected_result": "Учётная запись разблокирована",
-  "safety_notes": "Действие разрешено учебным сценарием",
   "verification_sql": "SELECT username, account_status FROM dba_users WHERE username = 'COMPROMISED_USER'",
-  "next_goal": "Найти таблицу credentials",
-  "username": null,
-  "password": null
+  "next_goal": "Найти таблицу credentials"
 }
 
 Допустимые action_type: connect, sql, verify, set_role, final_report, stop, ask_human.

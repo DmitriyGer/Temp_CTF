@@ -63,6 +63,52 @@ docker compose run --rm oracle-agent collect-trajectories --target 1000
 REQUEST_TIMEOUT=900 docker compose run --rm oracle-agent
 ```
 
+## Просмотр выполнения
+
+Агент выводит в Docker logs текущий этап, номер шага, ожидание модели, выбранный
+action, маскированный SQL, результат safety guard, результат Oracle,
+verification и длительность. Пароли и полный prompt не выводятся.
+
+```bash
+docker compose run --rm oracle-agent
+```
+
+Чтобы после запуска использовать именно `docker compose logs`, запускайте
+сервис без `run --rm`:
+
+```bash
+docker compose up -d --build oracle-agent
+```
+
+В другом терминале:
+
+```bash
+docker compose logs -f oracle-agent
+```
+
+Пример:
+
+```text
+stage=step_start step=3/40 current_user=system
+stage=llm_wait step=3 attempt=1/3 prompt_chars=7200
+stage=action_received step=3 type=sql sql=ALTER USER ...
+stage=sql_guard allowed=True
+stage=step_done step=3 status=success total_ms=17020
+```
+
+Более подробные диагностические сообщения:
+
+```bash
+LOG_LEVEL=DEBUG docker compose run --rm oracle-agent
+```
+
+Параметры производительности Ollama:
+
+```bash
+OLLAMA_NUM_CTX=4096 OLLAMA_NUM_PREDICT=192 \
+docker compose run --rm oracle-agent
+```
+
 ## Как работает агент
 
 Агент загружает инструкции из `oracle_ctf_playbook`, получает от Ollama один JSON-action, проверяет SQL через allowlist и только затем выполняет его в Oracle через `python-oracledb`. Пароли маскируются, опасные SQL-команды блокируются, флаг сохраняется только после реального результата Oracle.

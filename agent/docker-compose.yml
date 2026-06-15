@@ -21,6 +21,9 @@ services:
       TRAJECTORY_TARGET_COUNT: ${TRAJECTORY_TARGET_COUNT:-1000}
       ALLOW_ALTER_SYSTEM: ${ALLOW_ALTER_SYSTEM:-false}
       REQUEST_TIMEOUT: ${REQUEST_TIMEOUT:-600}
+      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-4096}
+      OLLAMA_NUM_PREDICT: ${OLLAMA_NUM_PREDICT:-256}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
     volumes:
       - ./oracle_ctf_playbook:/app/oracle_ctf_playbook:ro
       - ./trajectories:/app/trajectories

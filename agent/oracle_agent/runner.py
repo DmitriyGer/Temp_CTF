@@ -31,7 +31,11 @@ class AgentRunner:
         self.settings = settings
         self.context = load_playbook(settings.playbook_dir, settings.task_file)
         self.ollama = ollama or OllamaClient(
-            settings.ollama_url, settings.ollama_model, settings.request_timeout
+            settings.ollama_url,
+            settings.ollama_model,
+            settings.request_timeout,
+            settings.ollama_num_ctx,
+            settings.ollama_num_predict,
         )
         self.oracle = oracle or OracleClient(
             settings.oracle_host, settings.oracle_port, settings.oracle_service
@@ -50,15 +54,38 @@ class AgentRunner:
         self.failed_sql_counts: dict[str, int] = {}
 
     def run(self) -> dict[str, Any]:
-        LOGGER.info("Configuration: %s", self.settings.safe_summary())
-        LOGGER.info("Playbook: %s", self.context.summary())
+        LOGGER.info(
+            "stage=agent_start trace_id=%s mode=%s task=%s max_steps=%d",
+            self.recorder.trace_id,
+            "dry_run" if self.settings.dry_run else "live",
+            self.settings.task_file,
+            self.settings.max_steps,
+        )
+        LOGGER.info("stage=config values=%s", self.settings.safe_summary())
+        LOGGER.info("stage=playbook_loaded summary=%s", self.context.summary())
         if not self.settings.dry_run:
             self.ollama.ensure_available()
+            LOGGER.info(
+                "stage=oracle_connect user=%s dsn=%s",
+                self.settings.oracle_user,
+                self.oracle.dsn,
+            )
+            connect_started = time.perf_counter()
             connect_result = self.oracle.connect(
                 self.settings.oracle_user, self.settings.oracle_password
             )
             if not connect_result.success:
+                LOGGER.error(
+                    "stage=oracle_connect_failed code=%s error=%s",
+                    connect_result.error_code,
+                    connect_result.error_message,
+                )
                 return self._finish("failed", connect_result.error_message)
+            LOGGER.info(
+                "stage=oracle_connected user=%s duration_ms=%d",
+                self.settings.oracle_user,
+                int((time.perf_counter() - connect_started) * 1000),
+            )
             self._append_history("connect", connect_result.as_dict())
         else:
             self.ollama.ensure_available()
@@ -67,14 +94,48 @@ class AgentRunner:
         prompt = initial_prompt(self.context)
         try:
             for step_number in range(1, self.settings.max_steps + 1):
+                LOGGER.info(
+                    "stage=step_start step=%d/%d current_user=%s",
+                    step_number,
+                    self.settings.max_steps,
+                    self.oracle.current_user or "dry-run",
+                )
                 started = time.perf_counter()
-                action, prompt = self._request_action(prompt)
+                llm_started = time.perf_counter()
+                action, prompt = self._request_action(prompt, step_number)
+                llm_ms = int((time.perf_counter() - llm_started) * 1000)
+                LOGGER.info(
+                    "stage=action_received step=%d type=%s reason=%s sql=%s "
+                    "verification=%s next_goal=%s llm_ms=%d",
+                    step_number,
+                    action.action_type.value,
+                    _one_line(sanitize(action.reason, self.known_secrets)),
+                    _one_line(sanitize(mask_sql(action.sql), self.known_secrets)),
+                    _one_line(sanitize(mask_sql(action.verification_sql), self.known_secrets)),
+                    _one_line(sanitize(action.next_goal, self.known_secrets)),
+                    llm_ms,
+                )
+                execute_started = time.perf_counter()
                 outcome = self._execute_action(action)
+                execute_ms = int((time.perf_counter() - execute_started) * 1000)
                 duration_ms = int((time.perf_counter() - started) * 1000)
                 self._record(step_number, prompt, action, outcome, duration_ms)
                 self._append_history(action.action_type.value, outcome)
+                LOGGER.log(
+                    logging.INFO if outcome.get("success") else logging.WARNING,
+                    "stage=step_done step=%d status=%s sql_allowed=%s "
+                    "error_code=%s rows=%s execute_ms=%d total_ms=%d",
+                    step_number,
+                    "success" if outcome.get("success") else "failed",
+                    outcome.get("sql_allowed"),
+                    outcome.get("error_code"),
+                    _row_count(outcome),
+                    execute_ms,
+                    duration_ms,
+                )
 
                 if self.flag:
+                    LOGGER.info("stage=flag_received step=%d", step_number)
                     return self._finish("success", "Flag was returned by Oracle")
                 if action.action_type in {ActionType.FINAL_REPORT, ActionType.STOP}:
                     return self._finish("failed", "Model stopped before a verified flag was returned")
@@ -86,12 +147,24 @@ class AgentRunner:
         finally:
             self.oracle.close()
 
-    def _request_action(self, prompt: str) -> tuple[AgentAction, str]:
+    def _request_action(self, prompt: str, step_number: int) -> tuple[AgentAction, str]:
         current_prompt = prompt
         for attempt in range(3):
+            LOGGER.info(
+                "stage=llm_wait step=%d attempt=%d/3 prompt_chars=%d",
+                step_number,
+                attempt + 1,
+                len(current_prompt),
+            )
             try:
                 return self.ollama.next_action(current_prompt), current_prompt
             except OllamaError as exc:
+                LOGGER.warning(
+                    "stage=llm_invalid step=%d attempt=%d/3 error=%s",
+                    step_number,
+                    attempt + 1,
+                    _one_line(str(exc), 300),
+                )
                 if attempt == 2:
                     raise
                 current_prompt = next_prompt(
@@ -147,6 +220,7 @@ class AgentRunner:
                 "result": {"mode": "dry_run", "user": username},
                 "sql_allowed": None,
             }
+        LOGGER.info("stage=oracle_reconnect user=%s", username)
         result = self.oracle.reconnect_as_user(username, password)
         return {
             "success": result.success,
@@ -159,6 +233,12 @@ class AgentRunner:
 
     def _sql_action(self, action: AgentAction) -> dict[str, Any]:
         guard = self.guard.check(action.sql)
+        LOGGER.info(
+            "stage=sql_guard allowed=%s reason=%s sql=%s",
+            guard.allowed,
+            guard.reason,
+            _one_line(sanitize(mask_sql(guard.normalized_sql), self.known_secrets)),
+        )
         if not guard.allowed:
             return {
                 "success": False,
@@ -187,6 +267,14 @@ class AgentRunner:
             }
 
         result = self._run_sql(guard.normalized_sql)
+        LOGGER.log(
+            logging.INFO if result.success else logging.WARNING,
+            "stage=sql_result status=%s rows=%d code=%s error=%s",
+            result.status,
+            result.row_count,
+            result.error_code,
+            _one_line(sanitize(result.error_message, self.known_secrets)),
+        )
         if result.success:
             self.failed_sql_counts.pop(guard.normalized_sql, None)
         else:
@@ -200,7 +288,22 @@ class AgentRunner:
         if result.success and action.verification_sql:
             verification_guard = self.guard.check(action.verification_sql)
             if verification_guard.allowed:
+                LOGGER.info(
+                    "stage=verification_start sql=%s",
+                    _one_line(
+                        sanitize(
+                            mask_sql(verification_guard.normalized_sql),
+                            self.known_secrets,
+                        )
+                    ),
+                )
                 verification = self._run_sql(verification_guard.normalized_sql).as_dict()
+                LOGGER.info(
+                    "stage=verification_done success=%s rows=%s code=%s",
+                    verification.get("success"),
+                    verification.get("row_count"),
+                    verification.get("error_code"),
+                )
             else:
                 verification = {
                     "success": False,
@@ -239,6 +342,10 @@ class AgentRunner:
             if username and password:
                 self.discovered_credentials = (str(username), str(password))
                 self.known_secrets.append(str(password))
+                LOGGER.info(
+                    "stage=credentials_found username=%s password=***",
+                    username,
+                )
                 return
 
     def _capture_flag(self, result: OracleResult, sql: str) -> None:
@@ -346,8 +453,33 @@ class AgentRunner:
 
     def _finish(self, status: str, reason: str | None) -> dict[str, Any]:
         summary = self.recorder.finalize(status, self.flag, reason)
-        build_completion_report(self.settings.trajectory_dir, summary, self.recorder.steps)
+        report_md, report_json = build_completion_report(
+            self.settings.trajectory_dir, summary, self.recorder.steps
+        )
+        LOGGER.info(
+            "stage=agent_finish status=%s steps=%d success=%d failed=%d "
+            "trajectory=%s report=%s reason=%s",
+            status,
+            summary["step_count"],
+            summary["successful_steps"],
+            summary["failed_steps"],
+            summary["trajectory_file"],
+            report_json,
+            _one_line(sanitize(reason, self.known_secrets)),
+        )
         return summary
+
+
+def _one_line(value: Any, limit: int = 220) -> str:
+    if value is None:
+        return "-"
+    text = re.sub(r"\s+", " ", str(value)).strip()
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def _row_count(outcome: dict[str, Any]) -> Any:
+    result = outcome.get("result")
+    return result.get("row_count") if isinstance(result, dict) else "-"
 
 
 def collect_trajectories(settings: Settings, target: int) -> dict[str, Any]:

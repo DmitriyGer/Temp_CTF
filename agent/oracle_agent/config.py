@@ -33,6 +33,9 @@ class Settings:
     trajectory_target_count: int
     allow_alter_system: bool
     request_timeout: int
+    ollama_num_ctx: int
+    ollama_num_predict: int
+    log_level: str
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -54,6 +57,9 @@ class Settings:
             trajectory_target_count=int(os.getenv("TRAJECTORY_TARGET_COUNT", "1000")),
             allow_alter_system=_as_bool(os.getenv("ALLOW_ALTER_SYSTEM"), False),
             request_timeout=int(os.getenv("REQUEST_TIMEOUT", "600")),
+            ollama_num_ctx=int(os.getenv("OLLAMA_NUM_CTX", "4096")),
+            ollama_num_predict=int(os.getenv("OLLAMA_NUM_PREDICT", "256")),
+            log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
         )
         settings.validate()
         return settings
@@ -74,6 +80,10 @@ class Settings:
             raise ValueError("MAX_STEPS must be at least 1")
         if self.trajectory_target_count < 1:
             raise ValueError("TRAJECTORY_TARGET_COUNT must be at least 1")
+        if self.ollama_num_ctx < 2048:
+            raise ValueError("OLLAMA_NUM_CTX must be at least 2048")
+        if self.ollama_num_predict < 64:
+            raise ValueError("OLLAMA_NUM_PREDICT must be at least 64")
 
     def with_overrides(self, **changes: object) -> "Settings":
         return replace(self, **changes)
@@ -89,6 +99,8 @@ class Settings:
             "oracle_password": mask_secret(self.oracle_password),
             "task_file": self.task_file,
             "dry_run": self.dry_run,
+            "ollama_num_ctx": self.ollama_num_ctx,
+            "ollama_num_predict": self.ollama_num_predict,
         }
 
 

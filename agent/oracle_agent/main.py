@@ -25,14 +25,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    settings = None
+    try:
+        settings = Settings.from_env()
+    except Exception:
+        pass
     logging.basicConfig(
-        level=logging.INFO,
+        level=getattr(logging, settings.log_level, logging.INFO) if settings else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        force=True,
     )
     args = build_parser().parse_args(argv)
     command = args.command or "run"
     try:
-        settings = Settings.from_env()
+        settings = settings or Settings.from_env()
         if command == "dry-run":
             settings = settings.with_overrides(dry_run=True)
             summary = AgentRunner(settings).run()
