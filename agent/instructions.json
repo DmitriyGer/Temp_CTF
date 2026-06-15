@@ -1,0 +1,58 @@
+{
+  "version": "2.0",
+  "purpose": "ИИ-агент для учебных Oracle CTF-заданий. Агент читает текст задания из task.txt, сам извлекает параметры варианта и выполняет SQL-цепочку для получения флага.",
+  "mode": "auto_detect_from_task_text",
+  "important_rules": [
+    "Не выполнять DROP, DELETE, TRUNCATE, UPDATE без явного требования задания.",
+    "Не выдавать пользователю CTF_STUDENT лишние системные права.",
+    "Роль CTF_ROLE назначать пользователю CTF_STUDENT, но не делать её ролью по умолчанию.",
+    "SELECT на CTF.CTF_FLAG выдавать через роль, а не напрямую пользователю.",
+    "Флаг читать под CTF_STUDENT только после SET ROLE CTF_ROLE IDENTIFIED BY ctf_role.",
+    "Каждый SQL-запрос, ответ и ошибка фиксируются в trajectories/trajectory.jsonl."
+  ],
+  "fallback_defaults": {
+    "compromised_user": "compromised_user",
+    "tablespace_name": "CTF_TABLESPACE",
+    "profile_name": "CTF_PROFILE",
+    "role_name": "CTF_ROLE",
+    "role_password": "ctf_role",
+    "student_user": "CTF_STUDENT",
+    "student_password": "ctf_student",
+    "temp_tablespace": "TEMP",
+    "flag_object": "CTF.CTF_FLAG",
+    "max_tablespace_size": "1G",
+    "autoextend_next_mb": 10
+  },
+  "profile_resource_map": {
+    "количество одновременных сессий": "SESSIONS_PER_USER",
+    "число одновременных сессий": "SESSIONS_PER_USER",
+    "время простоя": "IDLE_TIME",
+    "время простоя сессии": "IDLE_TIME",
+    "ограничение на неуспешные попытки входа": "FAILED_LOGIN_ATTEMPTS",
+    "число неудачных попыток входа до блокировки": "FAILED_LOGIN_ATTEMPTS",
+    "запрет на повторное использование пароля": "PASSWORD_REUSE_TIME",
+    "запрет на повторное использование последних": "PASSWORD_REUSE_MAX",
+    "лимит логических чтений за сессию": "LOGICAL_READS_PER_SESSION",
+    "лимит логических чтений на вызов": "LOGICAL_READS_PER_CALL",
+    "лимит cpu на вызов": "CPU_PER_CALL",
+    "лимит cpu на сессию": "CPU_PER_SESSION",
+    "время соединения": "CONNECT_TIME",
+    "срок действия пароля": "PASSWORD_LIFE_TIME",
+    "льготный период после истечения пароля": "PASSWORD_GRACE_TIME",
+    "время блокировки учётной записи": "PASSWORD_LOCK_TIME",
+    "время блокировки учетной записи": "PASSWORD_LOCK_TIME"
+  },
+  "sql_flow": [
+    "check_connection",
+    "unlock_compromised_user",
+    "read_credentials",
+    "create_tablespace",
+    "create_profile",
+    "create_role",
+    "create_student_user",
+    "grant_create_session",
+    "grant_role_not_default",
+    "grant_select_to_role",
+    "read_flag_as_student"
+  ]
+}

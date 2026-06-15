@@ -1,0 +1,15 @@
+services:
+  oracle-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: oracle-agent
+    restart: "no"
+    volumes:
+      - ../trajectories:/app/trajectories
+    networks:
+      - oracle-practice-net
+
+networks:
+  oracle-practice-net:
+    external: true

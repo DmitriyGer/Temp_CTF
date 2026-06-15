@@ -1,0 +1,31 @@
+{
+  "oracle": {
+    "hosts": [
+      "host.docker.internal",
+      "172.20.0.2",
+      "127.0.0.1",
+      "localhost",
+      "oracle-free"
+    ],
+    "port": 1521,
+    "service_name": "FREEPDB1",
+    "admin_user": "system",
+    "admin_password": "Tech12345"
+  },
+  "ollama": {
+    "enabled": true,
+    "base_url": "http://host.docker.internal:11434",
+    "api_urls": [
+      "http://host.docker.internal:11434/api/generate",
+      "http://ollama:11434/api/generate"
+    ],
+    "model": "qwen2.5-coder:7b",
+    "temperature": 0.0,
+    "timeout_seconds": 180,
+    "num_ctx": 4096
+  },
+  "agent": {
+    "task_file": "task.txt",
+    "trajectories_dir": "/app/trajectories"
+  }
+}

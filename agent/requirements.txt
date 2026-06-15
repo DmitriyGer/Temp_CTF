@@ -1,0 +1,2 @@
+oracledb==2.5.1
+requests==2.32.3

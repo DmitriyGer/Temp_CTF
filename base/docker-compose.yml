@@ -1,0 +1,20 @@
+services:
+  oracle-free:
+    image: gvenzl/oracle-free:full-faststart
+    container_name: oracle-free
+    restart: unless-stopped
+
+    ports:
+      - "1521:1521"
+
+    environment:
+      ORACLE_PASSWORD: "Tech12345"
+
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+
+    shm_size: "1g"
+
+volumes:
+  oracle-data:
+    name: oracle-practice-oracle-data
