@@ -21,6 +21,7 @@ class OptionalAdvisor:
         r"STARTUP|TRUNCATE|UPDATE|DBMS_|UTL_)\b",
         re.IGNORECASE,
     )
+
     SYSTEM_OWNERS = {
         "ANONYMOUS",
         "AUDSYS",
@@ -55,7 +56,12 @@ class OptionalAdvisor:
         "XS$NULL",
     }
 
-    def __init__(self, settings: LlmSettings, policy: dict[str, Any], journal: RunJournal) -> None:
+    def __init__(
+        self,
+        settings: LlmSettings,
+        policy: dict[str, Any],
+        journal: RunJournal,
+    ) -> None:
         self.settings = settings
         self.policy = policy
         self.journal = journal
@@ -63,14 +69,18 @@ class OptionalAdvisor:
     def explain(self, stage: str, error: str) -> str | None:
         if not self.settings.enabled or not self.settings.explain_errors:
             return None
+
         prompt = (
             "Ты консультант по локальной учебной Oracle CTF. "
             "Не создавай SQL и не предлагай обход прав. "
             "Кратко объясни ошибку и назови безопасную проверку.\n"
-            f"Этап: {stage}\nОшибка: {compact(error, 1000)}\n"
+            f"Этап: {stage}\n"
+            f"Ошибка: {compact(error, 1000)}\n"
             f"Правила: {json.dumps(self.policy.get('advisor_rules', []), ensure_ascii=False)}"
         )
+
         started = time.perf_counter()
+
         try:
             answer = self._request(prompt)
             self.journal.span(
@@ -128,7 +138,9 @@ class OptionalAdvisor:
                 "failed_tasks": failed_tasks,
             },
         )
+
         grounding = self._collect_grounding(database)
+
         observation: dict[str, Any] = {
             "status": "start",
             "failed_tasks": failed_tasks,
@@ -139,17 +151,21 @@ class OptionalAdvisor:
                 "Inspect its columns or read a small number of rows."
             ),
         }
+
         attempted_sql: set[str] = set()
         history: list[dict[str, Any]] = []
 
         for step in range(1, self.settings.search_steps + 1):
             prompt = self._search_prompt(step, observation, history)
+
             self.journal.event(
                 "llm_thinking",
                 "running",
                 {"step": step, "model": self.settings.model},
             )
+
             started = time.perf_counter()
+
             try:
                 raw_answer = self._request(prompt, max_tokens=700, json_mode=True)
             except Exception as exc:
@@ -212,7 +228,11 @@ class OptionalAdvisor:
                     "status": "invalid_llm_response",
                     "error": str(exc),
                     "response": compact(raw_answer, 1000),
-                    "instruction": "Return only a valid JSON object matching the schema.",
+                    "database_map": grounding,
+                    "instruction": (
+                        "Return only a valid JSON object. "
+                        "Use action=query with one read-only SELECT, or action=finish."
+                    ),
                 }
                 continue
 
@@ -225,9 +245,11 @@ class OptionalAdvisor:
                 return None
 
             sql = str(action.get("sql") or "").strip()
+
             try:
                 sql = self._validate_read_only_sql(sql)
                 normalized_sql = re.sub(r"\s+", " ", sql).upper()
+
                 if re.search(
                     r"\bSELECT \* FROM ALL_(OBJECTS|TABLES|VIEWS|TAB_COLUMNS)\b",
                     normalized_sql,
@@ -235,28 +257,41 @@ class OptionalAdvisor:
                     raise ValueError(
                         "Broad data-dictionary scans are unnecessary; use database_map"
                     )
+
                 if normalized_sql in attempted_sql:
                     raise ValueError("This SQL query was already executed")
+
                 direct_owner = self._direct_system_owner(sql)
                 if direct_owner:
                     raise ValueError(
                         f"Direct reads from Oracle-maintained schema {direct_owner} are not useful"
                     )
+
                 attempted_sql.add(normalized_sql)
+
             except ValueError as exc:
                 observation = {
                     "status": "rejected",
                     "error": str(exc),
                     "database_map": grounding,
+                    "attempted_sql": sorted(attempted_sql)[-10:],
                     "instruction": (
-                        "Choose a different read-only query against a non-system object "
-                        "from database_map."
+                        "Choose a different read-only SELECT query against a non-system "
+                        "object from database_map. Do not repeat rejected SQL."
                     ),
                 }
                 self.journal.event(
                     "llm_query",
                     "rejected",
                     {"step": step, "sql": sql, "error": str(exc)},
+                )
+                history.append(
+                    {
+                        "step": step,
+                        "sql": sql,
+                        "status": "rejected",
+                        "error": str(exc),
+                    }
                 )
                 continue
 
@@ -265,7 +300,9 @@ class OptionalAdvisor:
                 "running",
                 {"step": step, "sql": sql},
             )
+
             result = database.query(sql, max_rows=self.settings.query_row_limit)
+
             if not result.ok:
                 observation = {
                     "status": "oracle_error",
@@ -273,6 +310,10 @@ class OptionalAdvisor:
                     "error_code": result.error_code,
                     "error": result.error_message,
                     "database_map": grounding,
+                    "instruction": (
+                        "The query failed in Oracle. Choose a simpler read-only SELECT "
+                        "from database_map. Do not repeat failed SQL."
+                    ),
                 }
                 history.append(
                     {
@@ -290,6 +331,7 @@ class OptionalAdvisor:
                 continue
 
             found = matcher.scan_rows(result.rows, trusted_context=sql)
+
             self.journal.event(
                 "llm_query",
                 "success",
@@ -300,12 +342,18 @@ class OptionalAdvisor:
                     "rows_preview": result.rows[:5],
                 },
             )
+
             if found:
                 source = f"LLM query result column {found['column']}"
                 self.journal.event(
                     "llm_flag_found",
                     "success",
-                    {"step": step, "source": source, "sql": sql},
+                    {
+                        "step": step,
+                        "source": source,
+                        "sql": sql,
+                        "flag": found["flag"],
+                    },
                 )
                 return {
                     "flag": found["flag"],
@@ -315,24 +363,39 @@ class OptionalAdvisor:
                 }
 
             rows_for_model = self._compact_rows(result.rows)
+
             history.append(
                 {
                     "step": step,
                     "sql": sql,
                     "status": "empty" if not result.rows else "no_flag",
                     "row_count": result.row_count,
+                    "rows_preview": rows_for_model[:3],
                 }
             )
+
+            if result.rows:
+                next_instruction = (
+                    "Rows were returned, but the matcher did not accept a value as a flag. "
+                    "Analyze the returned values and choose a different exact column query "
+                    "if needed. Do not repeat the same SQL. Do not keep searching only for "
+                    "CTF{...} or FLAG{...}. A control value may be CVE-like, token-like, "
+                    "secret-like, result-like, answer-like, key-like or indicator-like."
+                )
+            else:
+                next_instruction = (
+                    "The query returned no rows. Do not query this empty result again. "
+                    "Choose another promising non-system object from database_map."
+                )
+
             observation = {
                 "status": "query_success",
                 "sql": sql,
                 "row_count": result.row_count,
                 "rows": rows_for_model,
                 "database_map": grounding,
-                "instruction": (
-                    "No flag matched. Do not query this empty object again. "
-                    "Choose another promising non-system object or inspect its columns."
-                ),
+                "attempted_sql": sorted(attempted_sql)[-10:],
+                "instruction": next_instruction,
             }
 
         self.journal.event(
@@ -411,20 +474,35 @@ class OptionalAdvisor:
             "OR UPPER(C.TABLE_NAME) LIKE '%CTF%' "
             "OR UPPER(C.TABLE_NAME) LIKE '%SECRET%' "
             "OR UPPER(C.TABLE_NAME) LIKE '%TOKEN%' "
+            "OR UPPER(C.TABLE_NAME) LIKE '%ANSWER%' "
+            "OR UPPER(C.TABLE_NAME) LIKE '%RESULT%' "
+            "OR UPPER(C.TABLE_NAME) LIKE '%KEY%' "
+            "OR UPPER(C.TABLE_NAME) LIKE '%VALUE%' "
+            "OR UPPER(C.TABLE_NAME) LIKE '%INDICATOR%' "
+            "OR UPPER(C.TABLE_NAME) LIKE '%EVIDENCE%' "
+            "OR UPPER(C.TABLE_NAME) LIKE '%INCIDENT%' "
             "OR UPPER(C.COLUMN_NAME) LIKE '%FLAG%' "
             "OR UPPER(C.COLUMN_NAME) LIKE '%SECRET%' "
             "OR UPPER(C.COLUMN_NAME) LIKE '%TOKEN%' "
+            "OR UPPER(C.COLUMN_NAME) LIKE '%ANSWER%' "
+            "OR UPPER(C.COLUMN_NAME) LIKE '%RESULT%' "
+            "OR UPPER(C.COLUMN_NAME) LIKE '%KEY%' "
             "OR UPPER(C.COLUMN_NAME) LIKE '%VALUE%' "
-            "OR UPPER(C.COLUMN_NAME) LIKE '%DATA%') "
+            "OR UPPER(C.COLUMN_NAME) LIKE '%DATA%' "
+            "OR UPPER(C.COLUMN_NAME) LIKE '%INDICATOR%' "
+            "OR UPPER(C.COLUMN_NAME) LIKE '%EVIDENCE%' "
+            "OR UPPER(C.COLUMN_NAME) LIKE '%INCIDENT%') "
             "ORDER BY C.OWNER, C.TABLE_NAME, C.COLUMN_ID",
             max_rows=160,
         )
         columns = self._compact_rows(columns_result.rows) if columns_result.ok else []
+
         context = {
             "non_system_owners": owners,
             "objects": objects,
             "interesting_columns": columns,
         }
+
         self.journal.event(
             "llm_grounding",
             "success",
@@ -434,11 +512,13 @@ class OptionalAdvisor:
                 "interesting_column_count": len(columns),
             },
         )
+
         return context
 
     @staticmethod
     def _compact_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         compacted: list[dict[str, Any]] = []
+
         for row in rows[:40]:
             compacted.append(
                 {
@@ -447,6 +527,7 @@ class OptionalAdvisor:
                     if index < 10
                 }
             )
+
         return compacted
 
     @classmethod
@@ -460,6 +541,7 @@ class OptionalAdvisor:
     @staticmethod
     def _parse_action(answer: str) -> dict[str, Any]:
         text = answer.strip()
+
         fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
         if fenced:
             text = fenced.group(1)
@@ -467,30 +549,42 @@ class OptionalAdvisor:
             start, end = text.find("{"), text.rfind("}")
             if start >= 0 and end > start:
                 text = text[start : end + 1]
+
         value = json.loads(text)
+
         if not isinstance(value, dict):
             raise ValueError("LLM response is not a JSON object")
+
         action = str(value.get("action", "")).lower()
+
         if action not in {"query", "finish"}:
             raise ValueError(f"Unsupported LLM action: {action!r}")
+
         if action == "query" and not value.get("sql"):
             raise ValueError("LLM query action has no SQL")
+
         value["action"] = action
         return value
 
     @classmethod
     def _validate_read_only_sql(cls, sql: str) -> str:
         clean = sql.strip()
+
         if clean.endswith(";"):
             clean = clean[:-1].rstrip()
+
         if not clean or not re.match(r"^(SELECT|WITH)\b", clean, re.IGNORECASE):
             raise ValueError("Only SELECT or WITH queries are allowed")
+
         if ";" in clean or "--" in clean or "/*" in clean:
             raise ValueError("Comments and multiple SQL statements are not allowed")
+
         if cls.BLOCKED_SQL.search(clean):
             raise ValueError("The query contains a blocked SQL operation")
+
         if len(clean) > 5000:
             raise ValueError("The query is too long")
+
         return clean
 
     def _request(
@@ -500,8 +594,10 @@ class OptionalAdvisor:
         json_mode: bool = False,
     ) -> str:
         headers = {"Content-Type": "application/json"}
+
         if self.settings.api_key:
             headers["Authorization"] = f"Bearer {self.settings.api_key}"
+
         if self.settings.api_type == "openai":
             response = requests.post(
                 f"{self.settings.base_url}/chat/completions",
@@ -518,18 +614,22 @@ class OptionalAdvisor:
             response.raise_for_status()
             choices = response.json().get("choices") or []
             return str(choices[0]["message"]["content"]) if choices else ""
+
         payload: dict[str, Any] = {
             "model": self.settings.model,
             "prompt": prompt,
             "stream": False,
             "options": {"temperature": 0, "num_predict": max_tokens},
         }
+
         if json_mode:
             payload["format"] = "json"
+
         response = requests.post(
             f"{self.settings.base_url}/api/generate",
             json=payload,
             timeout=self.settings.timeout,
         )
         response.raise_for_status()
+
         return str(response.json().get("response", ""))

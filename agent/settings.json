@@ -1,14 +1,8 @@
 {
   "oracle": {
-    "hosts": [
-      "host.docker.internal",
-      "172.17.0.1",
-      "oracle-free"
-    ],
+    "hosts": ["host.docker.internal", "172.17.0.1", "oracle-free"],
     "port": 58002,
-    "services": [
-      "FREEPDB1"
-    ],
+    "services": ["FREEPDB1"],
     "username": "system",
     "password": "Tech12345",
     "retries": 20,
@@ -25,7 +19,7 @@
     "api_key": "",
     "timeout": 180,
     "explain_errors": true,
-    "search_steps": 10,
+    "search_steps": 50,
     "query_row_limit": 30
   },
   "paths": {
@@ -47,13 +41,7 @@
       "RESULT",
       "KEY"
     ],
-    "credential_markers": [
-      "CREDENTIAL",
-      "CRED",
-      "LOGIN",
-      "PASSWORD",
-      "USER"
-    ],
+    "credential_markers": ["CREDENTIAL", "CRED", "LOGIN", "PASSWORD", "USER"],
     "excluded_owners": [
       "SYS",
       "SYSTEM",
