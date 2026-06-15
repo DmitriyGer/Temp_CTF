@@ -16,7 +16,14 @@
 
 ```bash
 cd agent
+docker compose build --no-cache oracle-agent
 docker compose run --rm oracle-agent
+```
+
+После изменения Python-кода или Dockerfile пересоберите образ:
+
+```bash
+docker compose build oracle-agent
 ```
 
 Если пароль Oracle отличается, передайте фактическое значение:

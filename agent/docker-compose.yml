@@ -1,5 +1,6 @@
 services:
   oracle-agent:
+    image: temp-ctf-oracle-agent:latest
     build: .
     extra_hosts:
       - "host.docker.internal:host-gateway"

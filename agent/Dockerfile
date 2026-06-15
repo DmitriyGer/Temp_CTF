@@ -11,8 +11,6 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY oracle_agent /app/oracle_agent
 COPY oracle_ctf_playbook /app/oracle_ctf_playbook
-COPY entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
 
-ENTRYPOINT ["/app/entrypoint.sh"]
+ENTRYPOINT ["python", "-m", "oracle_agent.main"]
 CMD ["run"]
