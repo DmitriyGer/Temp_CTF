@@ -78,7 +78,10 @@ class DatabaseDiscovery:
             )
             if not result.ok:
                 continue
-            found = self.matcher.scan_rows(result.rows)
+            found = self.matcher.scan_rows(
+                result.rows,
+                trusted_context=full_name,
+            )
             if found:
                 return {
                     "flag": found["flag"],

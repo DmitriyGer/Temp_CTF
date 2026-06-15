@@ -242,7 +242,10 @@ class CtfProvisioner:
                     for row in cursor.fetchmany(25)
                 ]
             connection.close()
-            found = self.matcher.scan_rows(rows)
+            found = self.matcher.scan_rows(
+                rows,
+                trusted_context=f"{owner}.{object_name}",
+            )
             if found:
                 self.journal.event(
                     "flag_read",

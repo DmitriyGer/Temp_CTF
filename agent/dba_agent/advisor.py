@@ -289,7 +289,7 @@ class OptionalAdvisor:
                 )
                 continue
 
-            found = matcher.scan_rows(result.rows)
+            found = matcher.scan_rows(result.rows, trusted_context=sql)
             self.journal.event(
                 "llm_query",
                 "success",
