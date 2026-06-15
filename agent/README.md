@@ -1,25 +1,54 @@
-# Tech-Practice Oracle LLM Agent v3
+# Oracle CTF AI Agent
 
-Версия v3 выполняет три заранее заданных варианта по очереди. Если `CTF.CTF_FLAG` не найден, запускается универсальный поиск по доступным объектам.
+Агент запускается отдельно от Oracle Database и Ollama. База и Ollama должны быть уже подняты и доступны с хоста.
 
-LLM через Ollama выбирает следующий tool/action. Python не даёт LLM выполнять SQL напрямую: SQL находится внутри безопасных инструментов.
+По умолчанию используются:
+
+- Ollama: `http://host.docker.internal:58003`;
+- Oracle: `host.docker.internal:58002`;
+- service name: `FREEPDB1`;
+- модель: `qwen2.5-coder:7b`;
+- вариант: `oracle_ctf_case_a.txt`.
 
 ## Запуск
 
-```powershell
-cd C:\Users\Taisiya\Documents\VSCode\University\Tech-Practice\agent
-docker compose -f docker-compose.agent.yaml up --build
+Из папки `agent`:
+
+```bash
+cd agent
+docker compose run --rm oracle-agent
 ```
 
-## Результаты
+Если пароль Oracle отличается, передайте фактическое значение:
 
-```powershell
-Get-Content ..\trajectories\final_result.json
-Get-Content ..\trajectories\trajectory_openinference.jsonl -Tail 20
+```bash
+ORACLE_PASSWORD=другой_пароль docker compose run --rm oracle-agent
 ```
 
-## 1000 тестовых траекторий
+## Другой вариант
 
-```powershell
-python .\collect_trajectories.py --count 1000
+```bash
+TASK_FILE=oracle_ctf_case_b.txt docker compose run --rm oracle-agent
 ```
+
+## Другие адреса Oracle и Ollama
+
+```bash
+OLLAMA_URL=http://host.docker.internal:11434 \
+ORACLE_HOST=host.docker.internal \
+ORACLE_PORT=1521 \
+ORACLE_PASSWORD=oracle \
+docker compose run --rm oracle-agent
+```
+
+## Сбор 1000 траекторий
+
+```bash
+docker compose run --rm oracle-agent collect-trajectories --target 1000
+```
+
+Траектории и completion report сохраняются в `agent/trajectories`.
+
+## Как работает агент
+
+Агент загружает инструкции из `oracle_ctf_playbook`, получает от Ollama один JSON-action, проверяет SQL через allowlist и только затем выполняет его в Oracle через `python-oracledb`. Пароли маскируются, опасные SQL-команды блокируются, флаг сохраняется только после реального результата Oracle.

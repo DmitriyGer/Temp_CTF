@@ -1,2 +1,5 @@
-oracledb==2.5.1
-requests==2.32.3
+oracledb>=2.5,<4
+requests>=2.32,<3
+pydantic>=2.8,<3
+python-dotenv>=1.0,<2
+tenacity>=9,<10

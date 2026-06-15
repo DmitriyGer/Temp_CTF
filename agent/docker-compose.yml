@@ -1,0 +1,25 @@
+services:
+  oracle-agent:
+    build: .
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:58003}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:7b}
+      ORACLE_HOST: ${ORACLE_HOST:-host.docker.internal}
+      ORACLE_PORT: ${ORACLE_PORT:-58002}
+      ORACLE_SERVICE: ${ORACLE_SERVICE:-FREEPDB1}
+      ORACLE_USER: ${ORACLE_USER:-system}
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:-Tech12345}
+      TASK_FILE: ${TASK_FILE:-oracle_ctf_case_a.txt}
+      PLAYBOOK_DIR: /app/oracle_ctf_playbook
+      TRAJECTORY_DIR: /app/trajectories
+      MAX_STEPS: ${MAX_STEPS:-40}
+      DRY_RUN: ${DRY_RUN:-false}
+      COLLECT_TRAJECTORIES: ${COLLECT_TRAJECTORIES:-false}
+      TRAJECTORY_TARGET_COUNT: ${TRAJECTORY_TARGET_COUNT:-1000}
+      ALLOW_ALTER_SYSTEM: ${ALLOW_ALTER_SYSTEM:-false}
+    volumes:
+      - ./oracle_ctf_playbook:/app/oracle_ctf_playbook:ro
+      - ./trajectories:/app/trajectories
+    command: ["run"]
